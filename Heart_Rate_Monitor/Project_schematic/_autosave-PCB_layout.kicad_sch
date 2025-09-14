@@ -1,0 +1,204 @@
+(kicad_sch
+	(version 20250114)
+	(generator "eeschema")
+	(generator_version "9.0")
+	(uuid "02d6f918-53c0-41b8-ad2b-5aa780b0d2b7")
+	(paper "A4")
+	(lib_symbols)
+	(rectangle
+		(start 135.89 111.76)
+		(end 142.24 114.3)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(uuid 04b1b471-5212-46ca-b5bb-429323e71347)
+	)
+	(rectangle
+		(start 105.41 74.93)
+		(end 147.32 80.01)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(uuid 0eabd269-1731-49ac-94b7-3191383142c7)
+	)
+	(rectangle
+		(start 105.41 110.49)
+		(end 110.49 113.03)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(uuid 3b42e001-b935-4385-896b-f0e4218c567d)
+	)
+	(rectangle
+		(start 111.76 110.49)
+		(end 116.84 113.03)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(uuid 45833a20-4118-4ce8-8408-1b821f633ee9)
+	)
+	(rectangle
+		(start 127.508 87.122)
+		(end 146.558 97.282)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(uuid 47aadac6-75ce-4fe3-8b7b-fabf8608ce86)
+	)
+	(rectangle
+		(start 100.33 73.66)
+		(end 166.37 114.3)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(uuid 55612c5e-4d61-403d-8ec1-ac5a17e96d74)
+	)
+	(rectangle
+		(start 127.508 99.822)
+		(end 146.558 109.982)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(uuid 566ece34-9349-4bc2-b9d1-7d119b9b1dae)
+	)
+	(rectangle
+		(start 105.41 81.28)
+		(end 125.73 105.41)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(uuid 81fde051-fa39-4d22-8a3e-7893c6c580d0)
+	)
+	(rectangle
+		(start 118.11 110.49)
+		(end 123.19 113.03)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(uuid 97e162b4-0bda-4699-a847-16f3a66a1f8a)
+	)
+	(text "LED1"
+		(exclude_from_sim no)
+		(at 105.41 109.22 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "303a0583-58ae-403f-8bdd-a22f9df0c6d6")
+	)
+	(text "LED2"
+		(exclude_from_sim no)
+		(at 112.014 109.22 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "ad174463-6334-4c20-aa68-f7559d9dcefe")
+	)
+	(text "USB"
+		(exclude_from_sim no)
+		(at 137.16 113.284 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "c49555e1-a0de-40f5-9544-29c77ab11f0d")
+	)
+	(text "CAPACITOS, LINEAR REGULATORS, ANTENNA"
+		(exclude_from_sim no)
+		(at 105.664 77.47 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "cd01f4e2-2e87-42bc-9b40-a3da3ac9e0d2")
+	)
+	(text "ESP32 C3"
+		(exclude_from_sim no)
+		(at 110.236 91.694 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "d22f5817-cb33-4d83-8ab7-15d18a444bab")
+	)
+	(text "MAX30100"
+		(exclude_from_sim no)
+		(at 133.35 92.202 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "d2514fc8-0b7c-43bf-8922-e68d7a525685")
+	)
+	(text "LED3"
+		(exclude_from_sim no)
+		(at 118.11 108.966 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "e874677d-66a7-494a-843d-34b86dd82e4e")
+	)
+	(text "TP4056"
+		(exclude_from_sim no)
+		(at 133.35 105.41 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "ef180809-c206-4215-a232-5fda887f1ff8")
+	)
+)
