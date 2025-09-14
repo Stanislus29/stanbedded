@@ -10,3 +10,8 @@
 
   <hr style="margin-top: 10px; width: 60%;">
 </div>
+
+```stanbedded``` is a repository which contains open source schematics and firmware which embedded systems engineers can reference to automate design tasks. 
+
+---
+Copyright © 2025 Somtochukwu Stanislus Emeka-Onwuneme
