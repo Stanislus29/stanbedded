@@ -1,19 +1,31 @@
+/*
+
+  FIRMWARE FOR "VITAPULSE" - a heart rate monitor
+  This device monitors the heart rate of the individual it is strapped to, and provides cloud based inference via Blynk
+
+  Author: Somtochukwu Emeka-Onwuneme
+  Copyright © 2025 Somtochukwu Stanislus Emeka-Onwuneme
+
+*/
+
 // ------------------- Blynk + WiFi Setup -------------------
 #define BLYNK_TEMPLATE_ID "TMPL2fqznONIY"
 #define BLYNK_TEMPLATE_NAME "Personal Health Monitoring System"
 #define BLYNK_AUTH_TOKEN "QtSGB02k4xZy0tlON2l-jGPzB_ow-9py"
 
-#include <EEPROM.h>
-#include <Wire.h>
-#include "MAX30100_PulseOximeter.h"
-#include <WiFi.h>
-#include <BlynkSimpleEsp32.h>
-#include <U8g2lib.h>
-#include <WiFiManager.h>
-#include <Arduino.h>
-#include <HTTPClient.h>
+// ---------------Initialize libraries-------------------
+#include <EEPROM.h> //Used to enable EEPROM storage 
+#include <Wire.h> //Library for I2C communication 
+#include "MAX30100_PulseOximeter.h" //MAX30100 library 
+#include <WiFi.h> //Adds WIFi compatability to the ESP32
+#include <BlynkSimpleEsp32.h> //Blynk library for the ESP32
+#include <U8g2lib.h>  //Library for OLED
+#include <WiFiManager.h>  //Library for the WiFi manager 
+#include <Arduino.h>  
+#include <HTTPClient.h> //Library for Over The Air (OTA) firmware updates
 #include <Update.h>
 #include <ArduinoJson.h>
+#include "VitaPulseDisplay.h"
 
 #define FW_VERSION "1.0.1"
 
@@ -26,9 +38,9 @@ const char* versionUrl = "https://raw.githubusercontent.com/Stanislus29/stanbedd
 
 #define SDA_PIN 19
 #define SCL_PIN 22
+#define LOC_PIN 25
 
 // Button for Wi-Fi bypass
-#define WIFI_BYPASS_PIN 25   // connect button to GPIO0 and GND
 #define DEBOUNCE_DELAY 200  // ms
 
 PulseOximeter pox;
@@ -38,8 +50,17 @@ WiFiManager wm;
 bool wifiBypassed = false;
 bool wifiConnected = false;
 
+int yOffset = 0; // or some pixel offset
+int btnY = 54 + yOffset;
+
+static uint8_t frame = 0;
+
 // For a 0.91" 128x64 OLED with I2C:
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0);
+
+bool buttonSelected = digitalRead(LOC_PIN) == LOW;
+
+VitaPulseDisplay display(u8g2);
 
 // ---------------- Blynk Reset Settings Handler ----------------
 BLYNK_WRITE(V2) {
@@ -48,19 +69,8 @@ BLYNK_WRITE(V2) {
     Serial.println("🔄 Resetting WiFi settings...");
     Blynk.virtualWrite(V2, 0);
 
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_6x10_tr);
-    u8g2.setCursor(2, 10);
-    u8g2.print("WiFi reset");
-    u8g2.setCursor(2, 20);
-    u8g2.print("from app.....");
-    u8g2.setCursor(2, 30);
-    u8g2.print("Configure new WiFi");
-    u8g2.setCursor(2, 40);
-    u8g2.print("or press 'LOC'");
-    u8g2.setCursor(2, 50);
-    u8g2.print("to run locally");
-    u8g2.sendBuffer();
+    display.showInterrupt();
+    delay(2000);
 
     // Reset settings & disconnect
     wm.resetSettings();
@@ -71,58 +81,89 @@ BLYNK_WRITE(V2) {
     wm.setConfigPortalBlocking(false);
     wm.startConfigPortal("ESP32_ConfigAP", "12345678");
 
+    bool buttonSelected = digitalRead(LOC_PIN) == LOW;
+
+    display.showOLEDMessage("Configure New WiFi", "OR", "");
+
+    int btnX = 20, btnY = 46 + yOffset, btnW = 40, btnH = 14;
+
+    u8g2.setDrawColor(1);
+    u8g2.drawBox(btnX, btnY, btnW, btnH);
+    u8g2.setFont(u8g2_font_8x13B_tr);
+    int textWidth = u8g2.getStrWidth("LOC");
+    int textX = btnX + (btnW - textWidth)/2;
+    int textY = btnY + btnH - 3;
+    u8g2.setDrawColor(0);
+    u8g2.drawStr(textX, textY, "LOC");
+    u8g2.setDrawColor(1);
+
+    u8g2.setFont(u8g2_font_6x12_tr);
+    u8g2.drawStr(btnX + btnW + 8, btnY + btnH - 3, "-> Exit");
+    u8g2.sendBuffer();
+
     unsigned long portalStart = millis();
     bool portalSuccess = false;
+    bool shouldRestart = false;
 
-    while (millis() - portalStart < 60000) {  // ⏳ 1 minute window
+while (millis() - portalStart < 60000) 
+  {
       wm.process();
+      buttonSelected = digitalRead(LOC_PIN) == LOW;
 
-      // Wi-Fi connected
       if (WiFi.status() == WL_CONNECTED) {
         Serial.println("✅ New WiFi configured and connected!");
         portalSuccess = true;
 
-        u8g2.clearBuffer();
-        u8g2.setCursor(2, 10);
-        u8g2.print("New WiFi OK!");
-        u8g2.setCursor(2, 20);
-        u8g2.setCursor(2, 30);
-        u8g2.print("Ending Interrupt....");
-        u8g2.sendBuffer();
-        delay(1000);
+        for (uint8_t frame = 0; frame <= 25; frame++) {  // 25 frames for animation
+                display.showConnected(frame);
+                delay(40);  // small delay for smooth animation
+            }
+
+        shouldRestart = true;
         break;
       }
 
-      // Offline bypass button
-      if (digitalRead(WIFI_BYPASS_PIN) == LOW) {
-        Serial.println("⚠️ Wi-Fi bypassed. Running locally.");
-        wifiBypassed = true;
+      static unsigned long lastPress = 0;   // stores last time button was pressed
 
-        u8g2.clearBuffer();
-        u8g2.setCursor(2, 10);
-        u8g2.print("Local mode");
-        u8g2.setCursor(2, 30);
-        u8g2.print("Ending Interrupt....");
-        u8g2.sendBuffer();
-        delay(1000);
-        break;
+      if (buttonSelected && millis() - lastPress > 200) {  // 200 ms debounce
+          lastPress = millis();  // update last press time
+          wifiBypassed = true;
+          Serial.println("⚠️ Bypassed Wi-Fi. Running locally.");
+
+          display.showOLEDMessage("Configure New WiFi", "OR", "");
+
+          u8g2.drawFrame(btnX, btnY, btnW, btnH);
+          u8g2.setFont(u8g2_font_8x13B_tr);
+          int textWidth = u8g2.getStrWidth("LOC");
+          int textX = btnX + (btnW - textWidth)/2;
+          int textY = btnY + btnH - 3;
+          u8g2.drawStr(textX, textY, "LOC");
+
+          u8g2.setFont(u8g2_font_6x12_tr);
+          u8g2.drawStr(btnX + btnW + 8, btnY + btnH - 3, "-> Exit");
+          u8g2.sendBuffer();
+
+          delay(1000);
+
+          shouldRestart = true;
+          delay(1000);
+          return;
       }
+    delay(100);
+  }
 
-      delay(100); // keep responsive
-    }
-
-    // Timeout → local mode
     if (!portalSuccess && !wifiBypassed) {
+      pox.update();
       Serial.println("⏳ Config portal timeout. Running locally.");
       wifiBypassed = true;
 
-      u8g2.clearBuffer();
-      u8g2.setCursor(2, 10);
-      u8g2.print("Portal timeout");
-      u8g2.setCursor(2, 30);
-      u8g2.print("Ending Interrupt....");
-      u8g2.sendBuffer();
-      delay(1000);
+      display.showOLEDMessage("Portal Timeout", "", "Exiting setup...");
+
+      shouldRestart = true;
+    }
+
+    if (shouldRestart) {
+      ESP.restart();
     }
   }
 }
@@ -138,22 +179,9 @@ void readFromEEPROM() {
   Serial.printf("SpO2: %.1f %%\n", spo2Val);
   Serial.println("----------------------------");
 
-  // ✅ Show on OLED
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_6x10_tr);
+  display.showVitals("RES", hrVal, spo2Val, 4);
 
-  u8g2.setCursor(2, 14);
-  u8g2.print("Last Saved:");
-
-  u8g2.setCursor(2, 32);
-  u8g2.printf("HR: %.1f bpm", hrVal);
-
-  u8g2.setCursor(2, 50);
-  u8g2.printf("SpO2: %.1f %%", spo2Val);
-
-  drawWiFiIcon();
-  u8g2.sendBuffer();
-  delay(300);
+  delay(3000);
 }
 
 void saveToEEPROM(float meanHR, float spo2) {
@@ -162,108 +190,79 @@ void saveToEEPROM(float meanHR, float spo2) {
   EEPROM.commit();
 }
 
-// ---------------- OLED Wi-Fi Icon ----------------
-void drawWiFiIcon() {
-  if (WiFi.status() == WL_CONNECTED) {
-    const uint8_t baseX = 108;
-    const uint8_t baseY = 60;
-    const uint8_t barWidth = 3;
-    const uint8_t spacing = 2;
-
-    for (int i = 0; i < 4; i++) {
-      uint8_t barHeight = (i + 1) * 3;
-      u8g2.drawBox(baseX + i * (barWidth + spacing),
-                   baseY - barHeight,
-                   barWidth,
-                   barHeight);
-    }
-  }
-}
-
-// ---------------- Welcome Screen ----------------
-void welcomeScreen() {
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_7x14B_tr);  // Bold version
-
-  const char* title = "VITAPULSE";
-  int16_t x = (128 - u8g2.getStrWidth(title)) / 2; // 128 is typical OLED width
-  int16_t y = 32; // You can adjust this vertically (usually 32 or 36 for center)
-
-  u8g2.drawStr(x, y, title);
-  u8g2.sendBuffer();
-  delay(3000);
-  u8g2.clearBuffer();
-  u8g2.sendBuffer();
-}
-
 // ---------------- Wi-Fi Setup with Bypass ----------------
 #define WIFI_TIMEOUT_MS 60000   // 1 minute timeout
 unsigned long wifiStartTime = 0;
 
 void setupWiFi() {
-  pinMode(WIFI_BYPASS_PIN, INPUT_PULLUP);
+  pinMode(LOC_PIN, INPUT_PULLUP);
+
+  // Read button state
+  bool buttonSelected = digitalRead(LOC_PIN) == LOW;
 
   // Try stored credentials first
   Serial.println("📡 Trying saved Wi-Fi...");
 
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_6x10_tr);
-  u8g2.setCursor(2, 20);
-  u8g2.print("Connecting to WiFi...");
-  u8g2.setCursor(2, 30);
-  u8g2.print("----------------------");
-  u8g2.setCursor(2, 40);
-  u8g2.print("Press 'LOC' button");
-  u8g2.setCursor(2, 50);
-  u8g2.print("for offline");
-  u8g2.sendBuffer();
+  display.updateConnecting(buttonSelected);
 
   WiFi.begin();
 
   unsigned long startAttempt = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) {
-    delay(200);
-    if (digitalRead(WIFI_BYPASS_PIN) == LOW) {
-      wifiBypassed = true;
-      Serial.println("⚠️ Bypassed Wi-Fi. Running locally.");
-      u8g2.clearBuffer();
-      u8g2.setFont(u8g2_font_6x10_tr);
-      u8g2.setCursor(2, 30);
-      u8g2.print("Local Mode Enabled");
-      u8g2.sendBuffer();
-      delay(300);
-      return;
-    }
-  }
+  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) 
+    {
+      delay(200);
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("✅ Connected using saved credentials!");
-    wifiConnected = true;
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_6x10_tr);
-    u8g2.setCursor(2, 30);
-    u8g2.print("WiFi Connected!");
-    u8g2.sendBuffer();
-    delay(200);
-    return;
-  }
+      // Refresh button state inside loop
+          buttonSelected = digitalRead(LOC_PIN) == LOW;
+      // Update OLED connecting animation
+          display.updateConnecting(buttonSelected);
+
+          static unsigned long lastPress = 0;  // store last press time
+
+          if (buttonSelected && millis() - lastPress > 200) {  // 200 ms debounce
+              lastPress = millis();  // update last press time
+
+              wifiBypassed = true;
+              Serial.println("⚠️ Bypassed Wi-Fi. Running locally.");
+
+              display.showLocalMode();
+              delay(1000);
+              return;
+          }
+
+          if (WiFi.status() == WL_CONNECTED) {
+            wifiConnected = true;
+            Serial.println("✅ Connected using saved credentials!");
+
+            for (uint8_t frame = 0; frame <= 25; frame++) {  // 20 frames for animation
+                display.showConnected(frame);
+                delay(40);  // small delay for smooth animation
+            }
+            return;
+        }
+
+} 
 
   // If not connected → start WiFiManager portal
   Serial.println("❌ No saved Wi-Fi, starting config portal...");
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_6x10_tr);
-  u8g2.setCursor(2, 10);
-  u8g2.print("No WiFi saved");
-  u8g2.setCursor(2, 20);
-  u8g2.print("Config Portal...");
-  u8g2.setCursor(2, 30);
-  u8g2.print("----------------------");
-  u8g2.setCursor(2, 40);
-  u8g2.print("Press 'LOC' button");
-  u8g2.setCursor(2, 50);
-  u8g2.print("for offline");
-  u8g2.sendBuffer();
 
+  display.showOLEDMessage("No WiFi Saved", "Config Portal...","");
+
+  int btnX = 20, btnY = 54 + yOffset, btnW = 40, btnH = 14;
+
+  u8g2.setDrawColor(1);
+  u8g2.drawBox(btnX, btnY, btnW, btnH);
+  u8g2.setFont(u8g2_font_8x13B_tr);
+  int textWidth = u8g2.getStrWidth("LOC");
+  int textX = btnX + (btnW - textWidth)/2;
+  int textY = btnY + btnH - 3;
+  u8g2.setDrawColor(0);
+  u8g2.drawStr(textX, textY, "LOC");
+  u8g2.setDrawColor(1);
+
+  u8g2.setFont(u8g2_font_6x12_tr);
+  u8g2.drawStr(btnX + btnW + 8, btnY + btnH - 3, "-> Exit");
+  u8g2.sendBuffer();
 
   wm.setConfigPortalBlocking(false);
   wm.startConfigPortal("ESP32_ConfigAP", "12345678");
@@ -276,24 +275,20 @@ void setupWiFi() {
     if (WiFi.status() == WL_CONNECTED) {
       wifiConnected = true;
       Serial.println("✅ Connected via WiFiManager!");
-      u8g2.clearBuffer();
-      u8g2.setFont(u8g2_font_6x10_tr);
-      u8g2.setCursor(2, 30);
-      u8g2.print("WiFi Connected!");
-      u8g2.sendBuffer();
-      delay(200);
+      
+      display.showConnected(frame);
+      delay(1000);
+
       break;
     }
 
-    if (digitalRead(WIFI_BYPASS_PIN) == LOW) {
+    if (digitalRead(LOC_PIN) == LOW) {
       wifiBypassed = true;
       Serial.println("⚠️ Wi-Fi bypassed.");
-      u8g2.clearBuffer();
-      u8g2.setFont(u8g2_font_6x10_tr);
-      u8g2.setCursor(2, 30);
-      u8g2.print("Local Mode Enabled");
-      u8g2.sendBuffer();
-      delay(300);
+      
+      display.showLocalMode();
+      delay(1000);
+
       break;
     }
 
@@ -303,13 +298,8 @@ void setupWiFi() {
   if (!wifiConnected && !wifiBypassed) {
     Serial.println("⏳ Wi-Fi timeout. Running locally.");
     wifiBypassed = true;
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_6x10_tr);
-    u8g2.setCursor(2, 20);
-    u8g2.print("WiFi Timeout");
-    u8g2.setCursor(2, 40);
-    u8g2.print("Local Mode Enabled");
-    u8g2.sendBuffer();
+
+    display.showLocalMode();
     delay(400);
   }
 }
@@ -323,6 +313,8 @@ void handleWiFi() {
   if (!wifiConnected && (millis() - wifiStartTime >= WIFI_TIMEOUT_MS)) {
     wifiBypassed = true;
     Serial.println("⏰ Wi-Fi setup timed out.");
+
+    display.showLocalMode();
     return;
   }
 
@@ -385,21 +377,9 @@ bool pollHeartRateMeasurement(float &meanHR, float &spo2) {
         spo2Values[validSamples] = currentSpO2;
         validSamples++;
 
-        // Show progress
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_6x10_tr);
-        const char* msg = "Measuring...";
-        u8g2.setCursor((128 - u8g2.getStrWidth(msg)) / 2, 14);
-        u8g2.print(msg);
-
-        u8g2.setCursor(2, 32);
-        u8g2.printf("Samples: %d", validSamples);
-
-        u8g2.setCursor(2, 50);
-        u8g2.printf("HR: %.1f  SpO2: %.1f", hr, currentSpO2);
-
-        drawWiFiIcon();
-        u8g2.sendBuffer();
+        Serial.println("Measuring...");
+        Serial.printf("Samples: %d\n", validSamples);
+        Serial.printf("HR: %.1f  SpO2: %.1f\n", hr, currentSpO2);
       }
     }
   }
@@ -418,7 +398,7 @@ bool pollHeartRateMeasurement(float &meanHR, float &spo2) {
 
       Serial.printf("✅ Complete: HR=%.1f bpm, SpO2=%.1f %%\n", meanHR, spo2);
 
-      if (wifiConnected) {
+     if (wifiConnected) {
         Blynk.virtualWrite(0, meanHR);
         Blynk.virtualWrite(1, spo2);
       }
@@ -429,23 +409,12 @@ bool pollHeartRateMeasurement(float &meanHR, float &spo2) {
       spo2   = NAN;
     }
 
-    // Show final results
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_6x10_tr);
-    u8g2.setCursor(2, 14);
-    u8g2.print("Results:");
-
-    u8g2.setCursor(2, 32);
-    if (!isnan(meanHR)) u8g2.printf("HR: %.1f bpm", meanHR);
-    else u8g2.print("HR: --");
-
-    u8g2.setCursor(2, 50);
-    if (!isnan(spo2)) u8g2.printf("SpO2: %.1f %%", spo2);
-    else u8g2.print("SpO2: --");
-
-    drawWiFiIcon();
-    u8g2.sendBuffer();
-
+    if (!isnan(meanHR) && !isnan(spo2)) {
+    display.showVitals("RES", meanHR, spo2, 4);
+    } 
+    else {
+        readFromEEPROM();
+    }
     return true;
   }
 
@@ -463,7 +432,9 @@ void setup() {
   }
   u8g2.begin(SDA_PIN, SCL_PIN, U8X8_PIN_NONE);
 
-  welcomeScreen();
+  display.showWelcome();
+  delay(2000);
+  
   setupWiFi();
 
   if (wifiConnected) {
